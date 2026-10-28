@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIGEC-IPS | Gestión Contractual y Tarifaria</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- SheetJS compatible con estilos para lectura y exportación de hojas de cálculo -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+</head>
+<body>
+  <!-- Notificación Toast Flotante -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Modal Global de Confirmación -->
+  <div id="confirm-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="confirm-modal-title">Confirmar Acción</h3>
+        <button type="button" class="btn-close" onclick="App.closeConfirmModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message">¿Está seguro de realizar esta operación?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="App.closeConfirmModal()">Cancelar</button>
+        <button type="button" id="confirm-modal-ok-btn" class="btn btn-danger">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-layout">
+    <!-- Barra Lateral de Navegación -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">✚</div>
+        <div class="brand-text">
+          <h2>SIGEC-IPS</h2>
+          <small>Gestión Contractual</small>
+        </div>
+      </div>
+      
+      <div class="storage-badge">
+        <span class="status-indicator online"></span>
+        <span class="storage-text">Almacenamiento local</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" data-view="dashboard" onclick="App.navigate('dashboard')">
+          <span class="icon">📊</span> Panel Principal
+        </button>
+        <button class="nav-btn" data-view="entities" onclick="App.navigate('entities')">
+          <span class="icon">🏢</span> Entidades (EPS/IPS)
+        </button>
+        <button class="nav-btn" data-view="contracts" onclick="App.navigate('contracts')">
+          <span class="icon">📄</span> Contratos
+        </button>
+        <button class="nav-btn" data-write-only data-view="cross-information" onclick="App.navigate('cross-information')">
+          <span class="icon">🔀</span> Cruzar información
+        </button>
+        <button class="nav-btn" data-write-only data-view="backup" onclick="App.navigate('backup')">
+          <span class="icon">💾</span> Copias de Seguridad
+        </button>
+        <a class="nav-btn edit-only" href="consulta.html">
+          <span class="icon">👁</span> Vista de consulta
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <small>Datos guardados en este navegador</small>
+        <p>Use copias de seguridad para conservarlos en otros dispositivos</p>
+      </div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <main class="main-content">
+      <!-- Encabezado Superior -->
+      <header class="topbar">
+        <div class="readonly-notice" role="status">👁 Modo de solo lectura</div>
+        <div class="topbar-search">
+          <input type="text" id="global-search-input" placeholder="Buscar entidades, contratos o radicados..." oninput="App.handleGlobalSearch(event)">
+          <div id="global-search-results" class="search-flyout hidden"></div>
+        </div>
+      </header>
+
+      <!-- Vistas -->
+      <div class="views-wrapper">
+
+        <!-- VISTA 1: DASHBOARD -->
+        <section id="view-dashboard" class="app-view active">
+          <div class="view-header">
+            <div>
+              <h1>Panel de Control IPS</h1>
+              <p class="subtitle">Monitoreo consolidado de contratación, tarifas y cotizaciones.</p>
+            </div>
+          </div>
+
+          <!-- Métricas -->
+          <div class="kpi-grid">
+            <div class="kpi-card" onclick="App.navigate('entities')">
+              <div class="kpi-icon blue">🏢</div>
+              <div class="kpi-data">
+                <span class="kpi-label">Entidades Activas</span>
+                <span class="kpi-value" id="kpi-entities">0</span>
+              </div>
+            </div>
+            <div class="kpi-card" onclick="App.navigate('contracts')">
+              <div class="kpi-icon teal">📄</div>
+              <div class="kpi-data">
+                <span class="kpi-label">Contratos Registrados</span>
+                <span class="kpi-value" id="kpi-contracts">0</span>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-icon indigo">📑</div>
+              <div class="kpi-data">
+                <span class="kpi-label">Archivos Excel Vinculados</span>
+                <span class="kpi-value" id="kpi-excels">0</span>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-icon amber">💵</div>
+              <div class="kpi-data">
+                <span class="kpi-label">Total Cotizaciones</span>
+                <span class="kpi-value" id="kpi-quotes">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aviso de almacenamiento local -->
+          <div class="alert-banner">
+            <span class="alert-icon">⚠️</span>
+            <div>
+              <strong>Almacenamiento local:</strong> los registros y archivos se guardan en este navegador y no se comparten automáticamente con otros usuarios o dispositivos. Exporte copias de seguridad periódicamente; borrar los datos del navegador puede eliminar la información.
+            </div>
+          </div>
+
+          <!-- Tablas de Acceso Rápido -->
+          <div class="dashboard-tables-grid">
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Contratos Recientes</h3>
+                <button class="btn-link" onclick="App.navigate('contracts')">Ver todos</button>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Contrato</th>
+                      <th>Entidad</th>
+                      <th>Vigencia</th>
+                      <th>Estado</th>
+                      <th>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashboard-recent-contracts">
+                    <tr><td colspan="5" class="text-center">Sin contratos registrados.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Cotizaciones Recientes</h3>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Descripción</th>
+                      <th>Total</th>
+                      <th>Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashboard-recent-quotes">
+                    <tr><td colspan="4" class="text-center">Sin cotizaciones registradas.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VISTA 2: GESTIÓN DE ENTIDADES -->
+        <section id="view-entities" class="app-view">
+          <div class="view-header">
+            <div>
+              <h1>Gestión de Entidades</h1>
+              <p class="subtitle">Aseguradoras, EPS, Medicinas Prepagadas y Clientes Corporativos.</p>
+            </div>
+            <button class="btn btn-primary" data-write-only onclick="App.openEntityModal()">+ Nueva Entidad</button>
+          </div>
+
+          <div class="panel">
+            <div class="table-controls">
+              <input type="text" id="entity-filter-input" placeholder="Filtrar por nombre, NIT o código..." oninput="App.filterEntitiesTable()">
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Nombre de Entidad</th>
+                    <th>NIT</th>
+                    <th>Cód. Interno</th>
+                    <th>Contratos</th>
+                    <th>Estado</th>
+                    <th>Observaciones</th>
+                    <th data-write-only>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="entities-table-body">
+                  <tr><td colspan="7" class="text-center">Cargando entidades...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VISTA 3: GESTIÓN DE CONTRATOS -->
+        <section id="view-contracts" class="app-view">
+          <div class="view-header">
+            <div>
+              <h1>Gestión de Contratos</h1>
+              <p class="subtitle">Acuerdos de voluntades, convenios y tarifas contractuales.</p>
+            </div>
+            <button class="btn btn-primary" data-write-only onclick="App.openNewContractModal()">+ Crear Contrato</button>
+          </div>
+
+          <div class="panel">
+            <div class="table-controls">
+              <input type="text" id="contract-filter-input" placeholder="Filtrar por número, entidad o descripción..." oninput="App.filterContractsTable()">
+              <select id="contract-status-filter" onchange="App.filterContractsTable()">
+                <option value="">Todos los Estados</option>
+                <option value="Activo">Activo</option>
+                <option value="En Liquidación">En Liquidación</option>
+                <option value="Finalizado">Finalizado</option>
+                <option value="Suspendido">Suspendido</option>
+              </select>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Nº Contrato</th>
+                    <th>Entidad</th>
+                    <th>Descripción</th>
+                    <th>Vigencia</th>
+                    <th>Versión Excel</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="contracts-table-body">
+                  <tr><td colspan="7" class="text-center">Cargando contratos...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VISTA 4: CRUCE DE INFORMACIÓN -->
+        <section id="view-cross-information" class="app-view">
+          <div class="view-header">
+            <div>
+              <h1>Cruzar información</h1>
+              <p class="subtitle">Compare un tarifario contractual con otro archivo Excel por código, servicio u otra columna común.</p>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>1. Seleccione los archivos y las columnas</h3>
+                <small class="text-muted">El cruce conserva sus archivos originales y compara cada precio con el tarifario vigente.</small>
+              </div>
+            </div>
+            <div class="cross-configuration">
+              <div class="cross-data-source">
+                <h4>Tarifario contractual existente</h4>
+                <div class="form-group">
+                  <label for="cross-contract-select">Contrato *</label>
+                  <select id="cross-contract-select" onchange="App.handleCrossContractChange(this.value)">
+                    <option value="">Seleccione un contrato...</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="cross-contract-sheet">Hoja *</label>
+                  <select id="cross-contract-sheet" onchange="App.handleCrossSourceSheetChange()">
+                    <option value="">Seleccione una hoja...</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="cross-contract-key">Columna para cruzar *</label>
+                    <select id="cross-contract-key" onchange="App.handleCrossColumnChange()">
+                      <option value="">Seleccione una columna...</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="cross-contract-price">Columna de precio *</label>
+                    <select id="cross-contract-price" onchange="App.handleCrossColumnChange()">
+                      <option value="">Seleccione una columna...</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cross-data-source">
+                <h4>Nuevo archivo para comparar</h4>
+                <div class="form-group">
+                  <label for="cross-file">Archivo Excel o CSV *</label>
+                  <input type="file" id="cross-file" accept=".xlsx, .xls, .csv" onchange="App.handleCrossFileSelection(event)">
+                  <small id="cross-file-name" class="field-hint">Admite .xlsx, .xls y .csv.</small>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="cross-header-row">Fila de encabezados</label>
+                    <input type="number" id="cross-header-row" value="1" min="1" max="100" onchange="App.handleCrossHeaderRowChange(this.value)">
+                  </div>
+                  <div class="form-group">
+                    <label for="cross-upload-sheet">Hoja *</label>
+                    <select id="cross-upload-sheet" onchange="App.handleCrossUploadSheetChange(this.value)" disabled>
+                      <option value="">Cargue un archivo...</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="cross-upload-key">Columna para cruzar *</label>
+                    <select id="cross-upload-key" onchange="App.handleCrossColumnChange()" disabled>
+                      <option value="">Seleccione una columna...</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="cross-upload-price">Columna de precio *</label>
+                    <select id="cross-upload-price" onchange="App.handleCrossColumnChange()" disabled>
+                      <option value="">Seleccione una columna...</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="cross-extra-columns">
+              <div class="cross-extra-header">
+                <div>
+                  <h4>Columnas adicionales</h4>
+                  <p class="field-hint">Agregue pares de columnas para mostrarlos en el resultado. Marque los que también deben coincidir para emparejar códigos duplicados.</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline" onclick="App.addCrossColumnMapping()">+ Agregar columnas</button>
+              </div>
+              <div id="cross-column-mappings" class="cross-column-mappings"></div>
+            </div>
+            <div class="cross-actions">
+              <p class="field-hint">La diferencia se calcula como precio del archivo nuevo menos precio contractual. El porcentaje usa como base el precio contractual.</p>
+              <div class="cross-action-buttons">
+                <button type="button" class="btn btn-secondary" onclick="App.resetInformationCross()">Limpiar cruce</button>
+                <button type="button" id="btn-run-cross" class="btn btn-primary" onclick="App.runInformationCross()" disabled>🔀 Cruzar información</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header table-actions-header">
+              <div>
+                <h3>2. Resultado del cruce</h3>
+                <small id="cross-result-summary" class="text-muted">Configure los archivos y columnas para generar el resultado.</small>
+              </div>
+              <button type="button" id="btn-export-cross" class="btn btn-sm btn-outline" onclick="App.exportInformationCross()" disabled>📥 Exportar resultado</button>
+            </div>
+            <div id="cross-result-stats" class="cross-result-stats hidden" aria-live="polite">
+              <div class="cross-stat-card">
+                <span>Coincidencias</span>
+                <strong id="cross-stat-matched">0</strong>
+              </div>
+              <div class="cross-stat-card">
+                <span>Precios iguales</span>
+                <strong id="cross-stat-equal">0</strong>
+              </div>
+              <div class="cross-stat-card">
+                <span>Precios diferentes</span>
+                <strong id="cross-stat-different">0</strong>
+              </div>
+              <div class="cross-stat-card">
+                <span>Solo en contrato</span>
+                <strong id="cross-stat-source-only">0</strong>
+              </div>
+              <div class="cross-stat-card">
+                <span>Solo en archivo nuevo</span>
+                <strong id="cross-stat-upload-only">0</strong>
+              </div>
+            </div>
+            <div class="cross-result-controls">
+              <input type="search" id="cross-result-search" placeholder="Buscar código, descripción o valor..." oninput="App.filterInformationCrossResult()" disabled>
+              <select id="cross-result-filter" onchange="App.filterInformationCrossResult()" disabled>
+                <option value="">Todos los resultados</option>
+                <option value="Igual">Precios iguales</option>
+                <option value="Diferente">Precios diferentes</option>
+                <option value="No se encuentra en contrato">Solo en archivo nuevo</option>
+                <option value="No se encuentra en archivo nuevo">Solo en contrato</option>
+                <option value="Sin clave para cruzar">Sin clave para cruzar</option>
+              </select>
+              <span id="cross-result-count" class="text-muted" aria-live="polite"></span>
+            </div>
+            <div class="table-responsive dynamic-table-scroll">
+              <table class="data-table spreadsheet-table">
+                <thead id="cross-result-head">
+                  <tr><th>Resultado</th></tr>
+                </thead>
+                <tbody id="cross-result-body">
+                  <tr><td class="text-center">Aún no se ha realizado ningún cruce.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VISTA 4: DETALLE INDIVIDUAL DE CONTRATO (2 TABLAS PARALELAS) -->
+        <section id="view-contract-detail" class="app-view">
+          <div class="view-header">
+            <div>
+              <div class="breadcrumb">
+                <a href="javascript:void(0)" onclick="App.navigate('contracts')">Contratos</a> / <span id="detail-contract-number">C000</span>
+              </div>
+              <h1 id="detail-contract-title">Detalle del Contrato</h1>
+              <p class="subtitle" id="detail-contract-subtitle">Entidad: -</p>
+            </div>
+            <div class="header-actions">
+              <button class="btn btn-secondary" data-write-only onclick="App.openUpdateExcelModal()">⬆ Actualizar Excel Contractual</button>
+              <button class="btn btn-secondary" onclick="App.openVersionHistoryModal()">📜 Versiones</button>
+              <button class="btn btn-secondary" onclick="App.navigate('contracts')">Volver</button>
+            </div>
+          </div>
+
+          <!-- Resumen de metadatos del contrato -->
+          <div class="contract-metadata-bar" id="detail-contract-meta-bar">
+            <!-- Renderizado dinámico -->
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Documentos del contrato</h3>
+                <small class="text-muted">Los archivos se guardan en el almacenamiento local de este navegador. El espacio disponible depende del dispositivo y del navegador.</small>
+              </div>
+              <label class="btn btn-primary" data-write-only>
+                Cargar documento
+                <input type="file" id="contract-document-file" class="hidden" onchange="App.uploadContractDocument(event)">
+              </label>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead><tr><th>Archivo</th><th>Tipo</th><th>Tamaño</th><th>Fecha de carga</th><th>Acciones</th></tr></thead>
+                <tbody id="contract-documents-body">
+                  <tr><td colspan="5" class="text-center">Cargando documentos...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="contract-tabs">
+            <div class="contract-tab-list" role="tablist" aria-label="Información del contrato">
+              <button type="button" class="contract-tab active" id="tab-contract-excel" role="tab"
+                aria-selected="true" aria-controls="panel-contract-excel" tabindex="0"
+                data-contract-tab="excel" onclick="App.switchContractTab('excel')"
+                onkeydown="App.handleContractTabKeydown(event)">Tarifario del contrato</button>
+              <button type="button" class="contract-tab" id="tab-contract-quotes" role="tab"
+                aria-selected="false" aria-controls="panel-contract-quotes" tabindex="-1"
+                data-contract-tab="quotes" onclick="App.switchContractTab('quotes')"
+                onkeydown="App.handleContractTabKeydown(event)">Cotizaciones</button>
+            </div>
+
+            <!-- PANEL TABLA 1: DATOS DINÁMICOS EXCEL -->
+            <div class="panel contract-tab-panel" id="panel-contract-excel" role="tabpanel"
+              aria-labelledby="tab-contract-excel" data-contract-panel="excel">
+              <div class="panel-header table-actions-header">
+                <div>
+                  <h3 id="contract-excel-title">Tarifario Contractual (Excel)</h3>
+                  <small id="contract-excel-file-info" class="text-muted">Sin archivo</small>
+                </div>
+                <div class="panel-actions">
+                  <button class="btn btn-sm btn-outline" onclick="App.exportCurrentContractExcel()">📥 Exportar XLS</button>
+                  <button class="btn btn-sm btn-outline" onclick="App.downloadOriginalContractExcel()">💾 Archivo Original</button>
+                </div>
+              </div>
+
+              <div id="excel-sheet-tabs" class="excel-sheet-tabs" role="tablist" aria-label="Hojas del archivo Excel"></div>
+
+              <div class="table-controls compact">
+                <input type="text" id="excel-data-search" placeholder="Buscar en todas las columnas..." oninput="App.filterExcelDataTable()">
+                <div class="pagination-info" id="excel-pagination-info">Mostrando 0 de 0</div>
+              </div>
+
+              <div class="table-responsive dynamic-table-scroll" id="excel-table-container">
+                <table class="data-table dynamic spreadsheet-table" id="excel-data-table">
+                  <thead id="excel-table-head">
+                    <tr><th>Cargando columnas...</th></tr>
+                  </thead>
+                  <tbody id="excel-table-body">
+                    <tr><td>Seleccione o importe un archivo Excel.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="table-pagination">
+                <button class="btn btn-sm" id="btn-excel-prev" onclick="App.changeExcelPage(-1)">◀ Anterior</button>
+                <span id="excel-current-page-label">Página 1</span>
+                <button class="btn btn-sm" id="btn-excel-next" onclick="App.changeExcelPage(1)">Siguiente ▶</button>
+              </div>
+            </div>
+
+            <!-- PANEL TABLA 2: COTIZACIONES DEL CONTRATO -->
+            <div class="panel contract-tab-panel" id="panel-contract-quotes" role="tabpanel"
+              aria-labelledby="tab-contract-quotes" data-contract-panel="quotes" hidden>
+              <div class="panel-header table-actions-header">
+                <div>
+                  <h3>Cotizaciones Relacionadas</h3>
+                  <small class="text-muted">Servicios complementarios, tecnologías y tarifas especiales</small>
+                </div>
+                <div class="panel-actions">
+                  <button class="btn btn-sm btn-primary" data-write-only onclick="App.openNewQuoteModal()">+ Añadir Cotización</button>
+                  <button class="btn btn-sm btn-outline" onclick="App.exportQuotesToExcel()">📥 Exportar Cotizaciones</button>
+                </div>
+              </div>
+
+              <div class="table-controls compact">
+                <input type="text" id="quote-search-input" placeholder="Buscar por código, descripción, proveedor..." oninput="App.filterQuotesTable()">
+                <select id="quote-status-filter" onchange="App.filterQuotesTable()">
+                  <option value="">Todos los Estados</option>
+                  <option value="Pendiente">Pendiente</option>
+                  <option value="Aprobada">Aprobada</option>
+                  <option value="Rechazada">Rechazada</option>
+                  <option value="Archivada">Archivada</option>
+                </select>
+              </div>
+
+              <div class="table-responsive dynamic-table-scroll">
+                <table class="data-table spreadsheet-table" id="quotes-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Descripción</th>
+                      <th>Cant.</th>
+                      <th>V. Unitario</th>
+                      <th>V. Total</th>
+                      <th>Manual / Tipo</th>
+                      <th>Estado</th>
+                      <th>Adjunto</th>
+                      <th data-write-only>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="quotes-table-body">
+                    <tr><td colspan="9" class="text-center">No hay cotizaciones para este contrato.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- VISTA 5: COPIAS DE SEGURIDAD (BACKUP) -->
+        <section id="view-backup" class="app-view">
+          <div class="view-header">
+            <div>
+              <h1>Copias de Seguridad y Respaldo</h1>
+              <p class="subtitle">Exportación y restauración transaccional de toda la base de datos IPS.</p>
+            </div>
+          </div>
+
+          <div class="backup-grid">
+            <div class="panel">
+              <div class="panel-header">
+                <h3>📦 Generar Copia de Seguridad Completa</h3>
+              </div>
+              <div class="panel-body">
+                <p>Descargue un archivo estructurado <code>.json</code> que contiene:</p>
+                <ul class="bullet-list">
+                  <li>Todas las entidades y contratos registrados.</li>
+                  <li>Archivos Excel originales codificados en Base64.</li>
+                  <li>Todas las cotizaciones y documentos adjuntos.</li>
+                  <li>Historial de versiones y registros de auditoría.</li>
+                </ul>
+                <div class="backup-alert info">
+                  <strong>Guardar en el repositorio:</strong> Descargue la copia para el repositorio y reemplace <code>data/respaldo.json</code> en el proyecto con el archivo descargado. Después, confirme y publique ese cambio en GitHub. El sitio cargará esa copia al abrirse. Este proceso es manual: subir solo la página no guarda automáticamente los contratos cargados. Si el repositorio es público, cualquier persona podrá ver los contratos y documentos de ese archivo; no lo use para información confidencial.
+                </div>
+                <div class="backup-status-text" id="last-backup-label">Último respaldo: Nunca</div>
+                <button class="btn btn-primary btn-block" onclick="BackupModule.exportFullBackup()">Descargar Respaldo Completo (.JSON)</button>
+                <button class="btn btn-secondary btn-block" onclick="BackupModule.exportRepositoryBackup()">Descargar copia para el repositorio (respaldo.json)</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3>📥 Restaurar Copia de Seguridad</h3>
+              </div>
+              <div class="panel-body">
+                <p>Restaure el sistema cargando un archivo de respaldo generado previamente por esta aplicación.</p>
+                <div class="file-dropzone" id="backup-dropzone" onclick="document.getElementById('backup-file-input').click()">
+                  <div class="dropzone-content">
+                    <span class="dropzone-icon">📁</span>
+                    <span>Haga clic para seleccionar el archivo de respaldo (.json)</span>
+                    <small>Se verificará la integridad estructural antes de restaurar</small>
+                  </div>
+                  <input type="file" id="backup-file-input" accept=".json" class="hidden" onchange="BackupModule.handleFileSelected(event)">
+                </div>
+
+                <div id="backup-preview-card" class="backup-preview hidden">
+                  <h4>Contenido detectado en el respaldo:</h4>
+                  <ul id="backup-stats-list"></ul>
+                  <div class="restore-options">
+                    <label class="radio-label">
+                      <input type="radio" name="restore-mode" value="merge" checked>
+                      <strong>Combinar e importar:</strong> Agrega registros nuevos y actualiza existentes sin borrar lo actual.
+                    </label>
+                    <label class="radio-label">
+                      <input type="radio" name="restore-mode" value="replace">
+                      <strong>Restauración Total:</strong> Sustituye la base de datos completa por la copia cargada.
+                    </label>
+                  </div>
+                  <button class="btn btn-danger btn-block" onclick="BackupModule.executeRestore()">Proceder con la Restauración</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ==================== MODALES DEL SISTEMA ==================== -->
+
+  <!-- MODAL: Crear/Editar Entidad -->
+  <div id="modal-entity" class="modal-overlay hidden" data-write-only>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-entity-title">Registrar Entidad</h3>
+        <button type="button" class="btn-close" onclick="App.closeEntityModal()">&times;</button>
+      </div>
+      <form id="form-entity" onsubmit="App.saveEntity(event)">
+        <div class="modal-body">
+          <input type="hidden" id="entity-id">
+          <div class="form-group">
+            <label for="entity-name">Nombre de la Entidad / Aseguradora *</label>
+            <input type="text" id="entity-name" required placeholder="Ej: Nueva EPS, Sura, Seguros del Estado">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="entity-nit">NIT / Identificación</label>
+              <input type="text" id="entity-nit" placeholder="Ej: 900.123.456-7">
+            </div>
+            <div class="form-group">
+              <label for="entity-code">Código Interno</label>
+              <input type="text" id="entity-code" placeholder="Ej: ENT-001">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="entity-status">Estado</label>
+            <select id="entity-status">
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="entity-notes">Observaciones / Contacto</label>
+            <textarea id="entity-notes" rows="3" placeholder="Información de radicación, auditoría médica o contactos directos"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeEntityModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Entidad</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Crear Contrato con Asistente de Importación Inteligente de Excel -->
+  <div id="modal-contract" class="modal-overlay hidden" data-write-only>
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3 id="modal-contract-title">Nuevo Contrato IPS</h3>
+        <button type="button" class="btn-close" onclick="App.closeContractModal()">&times;</button>
+      </div>
+      <form id="form-contract" onsubmit="App.saveContract(event)">
+        <div class="modal-body">
+          <input type="hidden" id="contract-id">
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="contract-entity-id">Entidad *</label>
+              <select id="contract-entity-id" required>
+                <option value="">Seleccione una entidad...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="contract-number">Número de Contrato / Convenio *</label>
+              <input type="text" id="contract-number" required placeholder="Ej: CNTR-2026-089">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="contract-description">Descripción / Objeto Contractual *</label>
+            <input type="text" id="contract-description" required placeholder="Ej: Prestación de servicios de apoyo diagnóstico y quirúrgico">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="contract-start-date">Fecha de Inicio *</label>
+              <input type="date" id="contract-start-date" required>
+            </div>
+            <div class="form-group">
+              <label for="contract-end-date">Fecha de Finalización *</label>
+              <input type="date" id="contract-end-date" required>
+            </div>
+            <div class="form-group">
+              <label for="contract-status">Estado</label>
+              <select id="contract-status">
+                <option value="Activo">Activo</option>
+                <option value="En Liquidación">En Liquidación</option>
+                <option value="Finalizado">Finalizado</option>
+                <option value="Suspendido">Suspendido</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="contract-notes">Observaciones Generales</label>
+            <textarea id="contract-notes" rows="2" placeholder="Topes contractuales, especificaciones de liquidación..."></textarea>
+          </div>
+
+          <hr class="divider">
+
+          <h4>Archivo Excel Contractual (Tarifario / Anexo Técnico)</h4>
+          <p class="field-hint">Admite formatos .xlsx, .xls y .csv con cualquier estructura de columnas. Se guardarán todas las hojas del archivo; el selector solo cambia la vista previa.</p>
+
+          <div class="form-group">
+            <input type="file" id="contract-excel-file" accept=".xlsx, .xls, .csv" onchange="ExcelParser.handleFileSelection(event)">
+          </div>
+
+          <!-- Opciones de Asistente de Lectura Excel -->
+          <div id="excel-sheet-selector-box" class="form-row hidden">
+            <div class="form-group">
+              <label for="excel-select-sheet">Hoja para previsualizar:</label>
+              <select id="excel-select-sheet" onchange="ExcelParser.handleSheetChange(this.value)"></select>
+            </div>
+            <div class="form-group">
+              <label for="excel-header-row">Fila de encabezados en todas las hojas (1, 2, 3...):</label>
+              <input type="number" id="excel-header-row" value="1" min="1" max="20" onchange="ExcelParser.handleHeaderRowChange(this.value)">
+            </div>
+          </div>
+
+          <!-- Vista Previa de la Importación -->
+          <div id="excel-preview-box" class="excel-preview-container hidden">
+            <h5>Vista Previa de Datos Detectados:</h5>
+            <div class="preview-stats" id="excel-preview-stats"></div>
+            <div class="table-responsive preview-table-wrap">
+              <table class="data-table compact" id="excel-preview-table"></table>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeContractModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-contract">Guardar Contrato</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Actualizar Versión de Excel para Contrato Existente -->
+  <div id="modal-update-excel" class="modal-overlay hidden" data-write-only>
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3>Cargar Nueva Versión de Excel Contractual</h3>
+        <button type="button" class="btn-close" onclick="App.closeUpdateExcelModal()">&times;</button>
+      </div>
+      <form id="form-update-excel" onsubmit="App.submitUpdateExcel(event)">
+        <div class="modal-body">
+          <p class="field-hint">Esta operación cargará todas las hojas del nuevo archivo como una versión del tarifario, preservando intactas las cotizaciones y el historial de versiones anteriores.</p>
+          <div class="form-group">
+            <label for="update-excel-file">Seleccione el nuevo archivo (.xlsx, .xls, .csv):</label>
+            <input type="file" id="update-excel-file" accept=".xlsx, .xls, .csv" required onchange="ExcelParser.handleUpdateFileSelection(event)">
+          </div>
+          <div id="update-excel-sheet-box" class="form-row hidden">
+            <div class="form-group">
+              <label for="update-excel-select-sheet">Hoja para previsualizar:</label>
+              <select id="update-excel-select-sheet" onchange="ExcelParser.handleUpdateSheetChange(this.value)"></select>
+            </div>
+            <div class="form-group">
+              <label for="update-excel-header-row">Fila de encabezados en todas las hojas:</label>
+              <input type="number" id="update-excel-header-row" value="1" min="1" max="20" onchange="ExcelParser.handleUpdateHeaderRowChange(this.value)">
+            </div>
+          </div>
+          <div id="update-excel-preview-box" class="excel-preview-container hidden">
+            <h5>Vista Previa del Nuevo Archivo:</h5>
+            <div class="preview-stats" id="update-excel-preview-stats"></div>
+            <div class="table-responsive preview-table-wrap">
+              <table class="data-table compact" id="update-excel-preview-table"></table>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeUpdateExcelModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-update-excel">Establecer Como Versión Vigente</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Historial de Versiones de Excel -->
+  <div id="modal-history" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Historial de Archivos Excel</h3>
+        <button type="button" class="btn-close" onclick="App.closeVersionHistoryModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Versión</th>
+                <th>Nombre de Archivo</th>
+                <th>Fecha Carga</th>
+                <th>Registros</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="history-versions-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="App.closeVersionHistoryModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Crear/Editar Cotización -->
+  <div id="modal-quote" class="modal-overlay hidden" data-write-only>
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3 id="modal-quote-title">Registrar Cotización</h3>
+        <button type="button" class="btn-close" onclick="App.closeQuoteModal()">&times;</button>
+      </div>
+      <form id="form-quote" onsubmit="App.saveQuote(event)">
+        <div class="modal-body">
+          <input type="hidden" id="quote-id">
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="quote-code">Código (CUPS / Interno / Ref) *</label>
+              <input type="text" id="quote-code" required placeholder="Ej: 890201">
+            </div>
+            <div class="form-group">
+              <label for="quote-tariff-type">Manual / Tipo de Tarifa *</label>
+              <input type="text" id="quote-tariff-type" required placeholder="Ej: SOAT + 15%, ISS 2001, Propia, Especial">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="quote-desc">Descripción del Servicio / Dispositivo / Insumo *</label>
+            <input type="text" id="quote-desc" required placeholder="Descripción médica o técnica detallada">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="quote-quantity">Cantidad *</label>
+              <input type="number" id="quote-quantity" value="1" min="1" step="any" required oninput="App.calculateQuoteTotal()">
+            </div>
+            <div class="form-group">
+              <label for="quote-unit-value">Valor Unitario ($) *</label>
+              <input type="number" id="quote-unit-value" value="0" min="0" step="any" required oninput="App.calculateQuoteTotal()">
+            </div>
+            <div class="form-group">
+              <label for="quote-total-value">Valor Total Calculado ($)</label>
+              <input type="number" id="quote-total-value" value="0" readonly class="input-readonly">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="quote-provider">Proveedor / Referencia</label>
+              <input type="text" id="quote-provider" placeholder="Ej: Laboratorios Baxter, Medtronic">
+            </div>
+            <div class="form-group">
+              <label for="quote-date">Fecha de Cotización *</label>
+              <input type="date" id="quote-date" required>
+            </div>
+            <div class="form-group">
+              <label for="quote-status">Estado</label>
+              <select id="quote-status">
+                <option value="Pendiente">Pendiente</option>
+                <option value="Aprobada">Aprobada</option>
+                <option value="Rechazada">Rechazada</option>
+                <option value="Archivada">Archivada</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="quote-observations">Observaciones</label>
+            <textarea id="quote-observations" rows="2" placeholder="Garantía, tiempo de entrega o detalles de negociación"></textarea>
+          </div>
+
+          <!-- Campos Personalizados Dinámicos -->
+          <div class="custom-fields-wrapper">
+            <div class="custom-fields-header">
+              <h5>Campos Personalizados Adicionales</h5>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="App.addCustomFieldRow()">+ Agregar Campo</button>
+            </div>
+            <div id="quote-custom-fields-container" class="custom-fields-list"></div>
+          </div>
+
+          <!-- Documento Adjunto -->
+          <div class="form-group attachment-section">
+            <label for="quote-file">Documento Adjunto (PDF, Imagen, Excel de Cotización):</label>
+            <input type="file" id="quote-file" onchange="App.handleQuoteAttachment(event)">
+            <div id="quote-attachment-indicator" class="file-attachment-info hidden"></div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeQuoteModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cotización</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts del Sistema -->
+  <script src="database.js"></script>
+  <script src="excel.js"></script>
+  <script src="backup.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
